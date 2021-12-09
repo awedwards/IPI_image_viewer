@@ -6,10 +6,12 @@ import numpy as np
 import pandas as pd
 from random import randrange
 import aicspylibczi
+import tifffile
 from datetime import datetime as dt
     
 LUTs = ['blue','cyan','gray','green','magenta','red','yellow']
-channel_names = ['DAPI','HLADR','CD8','CD163','CD4','XCR1','CD3','PDL1','PanCK']
+#channel_names = ['DAPI','HLADR','CD8','CD163','CD4','XCR1','CD3','PDL1','PanCK']
+channel_names = ['Treg','CD8','Nuclear','DC']
 
 threshold_dict = {}
 
@@ -18,7 +20,8 @@ for c in channel_names:
 
 @magicgui(
         call_button = "Save thresholds",
-        marker={"choices": [('DAPI', 'DAPI'),('CD3','CD3'),('CD4','CD4'),('CD8','CD8'),('CD163','CD163'),('XCR1','XCR1'),('HLADR','HLADR'),('PDL1','PDL1'),('Tumor','PanCK')]},
+        #marker={"choices": [('DAPI', 'DAPI'),('CD3','CD3'),('CD4','CD4'),('CD8','CD8'),('CD163','CD163'),('XCR1','XCR1'),('HLADR','HLADR'),('PDL1','PDL1'),('Tumor','PanCK')]},
+        marker={"choices":[('Treg','Treg'),('CD8','CD8'),('Nuclear','DAPI'),('DC','DC')]},
         threshold_slider={"widget_type": "FloatSlider",'max':20}
         )
 
@@ -37,26 +40,34 @@ def threshold_widget(
 def load_new_image(value: str):
 
     # clear old image
-
-    im_data = []
-
-    czifile = aicspylibczi.CziFile(value)
-    dims = czifile.get_dims_shape()
-    nchannels = dims[0]['C'][1]
-
-    for c in np.arange(nchannels):
-        print("Loading channel " + str(c))
-        im_data.append(czifile.read_mosaic(C=c,scale_factor=1))
     
-    image = np.stack(im_data)
-    if "CRC" in threshold_widget.image_filename.value.name:
-        channel_names[-1] = 'EPCAM'
-        threshold_widget.marker.set_choice('Tumor','EPCAM')
-        threshold_dict.pop('PanCK', None)
-        threshold_dict['EPCAM'] = 0.0
+    im_data = []
+    
+    if str(value).endswith(".czi"):
+        czifile = aicspylibczi.CziFile(value)
+        dims = czifile.get_dims_shape()
+        nchannels = dims[0]['C'][1]
+
+        for c in np.arange(nchannels):
+            print("Loading channel " + str(c))
+            im_data.append(czifile.read_mosaic(C=c,scale_factor=1))
+        image = np.stack(im_data)
+
+    elif str(value).endswith(".tiff") or value.endswith(".tif"):
+        tf = tifffile.imread(value)
+        x,y,nchannels = tf.shape
+        image = tf
     else:
-        channel_names[-1] = 'PanCK'
-        threshold_widget.marker.set_choice('Tumor','PanCK')
+        raise NotImplemented
+    if False:
+        if "CRC" in threshold_widget.image_filename.value.name:
+            channel_names[-1] = 'EPCAM'
+            threshold_widget.marker.set_choice('Tumor','EPCAM')
+            threshold_dict.pop('PanCK', None)
+            threshold_dict['EPCAM'] = 0.0
+        else:
+            channel_names[-1] = 'PanCK'
+            threshold_widget.marker.set_choice('Tumor','PanCK')
 
     for c in range(len(channel_names)):
         
