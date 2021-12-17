@@ -43,11 +43,11 @@ def load_new_image(value: str):
     czifile = aicspylibczi.CziFile(value)
     dims = czifile.get_dims_shape()
     nchannels = dims[0]['C'][1]
-
+    contrast_limits = []
     for c in np.arange(nchannels):
         print("Loading channel " + str(c))
         im_data.append(czifile.read_mosaic(C=c,scale_factor=1))
-    
+        contrast_limits.append([0, 2**16])
     image = np.stack(im_data)
     if "CRC" in threshold_widget.image_filename.value.name:
         channel_names[-1] = 'EPCAM'
@@ -66,7 +66,7 @@ def load_new_image(value: str):
         except KeyError:
             pass
 
-        viewer.add_image(image[c], name=channel_names[c], visible=False)
+        viewer.add_image(image[c], name=channel_names[c], visible=False, contrast_limits=contrast_limits[c])
         viewer.layers[c].colormap = LUTs[randrange(len(LUTs))]
         viewer.layers[c].opacity = 1.0
         viewer.layers[c].blending = 'additive'
