@@ -19,6 +19,7 @@ for c in channel_names:
 @magicgui(
         call_button = "Save thresholds",
         marker={"choices": [('DAPI', 'DAPI'),('CD3','CD3'),('CD4','CD4'),('CD8','CD8'),('CD163','CD163'),('XCR1','XCR1'),('HLADR','HLADR'),('PDL1','PDL1'),('Tumor','PanCK')]},
+        cell_type={"choices":['CD4 T cells','CD8 T cells','cdc1','mac','DoubleNeg T cells','other myeloid/B cells','tumor HLADR+','other']},
         threshold_slider={"widget_type": "FloatSlider",'max':20}
         )
 
@@ -26,6 +27,7 @@ def threshold_widget(
         threshold_value:float,
         threshold_slider=0.0,
         marker='DAPI',
+        cell_type='CD4 T cells',
         image_filename = pathlib.Path('/some/path.czi'),
         cell_data_filename = pathlib.Path('/some/path.csv')
         ):
@@ -86,13 +88,17 @@ def load_cell_data(value: str):
     x = np.array(data['centroid-0'])
     y = np.array(data['centroid-1'])
 
+    for c in channel_names:
+        data[c + "_expressed"] = np.array(data[c] > threshold_dict[c], dtype=np.int8)
+    
     points = np.stack((x, y)).transpose()
     
     points_layer = viewer.add_points(points,
             size=25,
             properties=data,
             face_color=threshold_widget.marker.value,
-            name='points')
+            name='points',
+            visible=False)
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
@@ -102,26 +108,79 @@ def threshold_slider_change(value: float):
     except KeyError:
         pass
 
+    channel = threshold_widget.marker.value
     data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
-    data = data[data[threshold_widget.marker.value] > value]
-    x = np.array(data['centroid-0'])
-    y = np.array(data['centroid-1'])
+    thresholded_data = data[data[channel] > value]
+    x = np.array(thresholded_data['centroid-0'])
+    y = np.array(thresholded_data['centroid-1'])
 
     points = np.stack((x, y)).transpose()
+    
+    threshold_widget.threshold_value.value = value
+    threshold_dict[channel] = value
+    
+    data[channel + "_expressed"] = np.array(data[channel] > threshold_dict[channel], dtype=np.int8)
+    
     if len(points) > 0: 
         points_layer = viewer.add_points(points,
                 size=25,
-                properties=data,
+                properties=thresholded_data,
                 face_color=threshold_widget.marker.value,
-                name='threshold result')
-    threshold_widget.threshold_value.value = value
-    threshold_dict[threshold_widget.marker.value] = value
+                name='threshold result',
+                visible=True)
+    
+    x = np.array(data['centroid-0'])
+    y = np.array(data['centroid-1'])
+
+    points = np.stack((x,y)).transpose()
+    
+    try:
+        viewer.layers.pop('points')
+    except KeyError:
+        pass
+
+    points_layer = viewer.add_points(points,
+            size=25,
+            properties=data,
+            face_color=threshold_widget.marker.value,
+            name='points',
+            visible=False)
+
+    update_cell_types()
+    cell_type_changed(threshold_widget.cell_type.value)
 
 @threshold_widget.marker.changed.connect
 def update_points_facecolor(value: str):
     viewer.layers['points'].face_color = value
     threshold_widget.threshold_slider.value = threshold_dict[value]
     threshold_widget.threshold_value.value = threshold_dict[value]
+
+@threshold_widget.cell_type.changed.connect
+def cell_type_changed(value: str):
+    
+    try:
+        viewer.layers.pop('cell type results')
+    except KeyError:
+        pass
+    
+    data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
+    
+    if 'cell_type' not in data.columns:
+        return
+    
+    data = data[data['cell_type']==value]
+
+    x = np.array(data['centroid-0'])
+    y = np.array(data['centroid-1'])
+
+    points = np.stack((x, y)).transpose()
+    
+    if len(points) > 0: 
+        points_layer = viewer.add_points(points,
+                size=25,
+                properties=data,
+                name='cell type results',
+                visible=True)
 
 @threshold_widget.threshold_value.changed.connect
 def threshold_value_changed(value: float):
@@ -141,12 +200,69 @@ def save():
     print("Thresholds saved at " + str(pathlib.Path(filepath, name[:-4] + "_thresholds.txt")))
 
     data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
-    
-    for c in channel_names:
-
-        data[c + "_expressed"] = np.array(data[c] > threshold_dict[c], dtype=np.int8)
+    for channel in threshold_dict.keys():
+        data[channel + "_expressed"] = np.array(data[channel] > threshold_dict[channel], dtype=np.int8)
     
     data.to_csv(pathlib.Path(filepath, name[:-4] + "_single_cell_data_gated" + dt.now().strftime('%Y%m%d') + ".csv"))
+
+def update_cell_types():
+   
+    data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
+    data['cell_type'] = ['other']*len(data) 
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['CD4_expressed']==1) & \
+            (data['CD3_expressed']==1) & \
+            (data['XCR1_expressed']==0)] = 'CD4 T cells'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['CD8_expressed']==1) & \
+            (data['CD3_expressed']==1) & \
+            (data['XCR1_expressed']==0)] = 'CD8 T cells'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['CD163_expressed']==1) & \
+            (data['HLADR_expressed']==1) & \
+            (data['CD3_expressed']==0)] = 'mac'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['XCR1_expressed']==1) & \
+            (data['HLADR_expressed']==1)] = 'cdc1'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['CD3_expressed']==1) & \
+            (data['CD4_expressed']==0) & \
+            (data['CD8_expressed']==0)] = 'DoubleNeg T cells'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['HLADR_expressed']==1) & \
+            (data['CD163_expressed']==0) & \
+            (data['CD3_expressed']==0) & \
+            (data['XCR1_expressed']==0)] = 'other myeloid/B cells'
+
+    data['cell_type'][(data['DAPI_expressed']==1) & \
+            (data['CD3_expressed']==0) & \
+            (data['CD4_expressed']==0) & \
+            (data['CD8_expressed']==0) & \
+            (data['XCR1_expressed']==0) & \
+            (data['HLADR_expressed']==1) & \
+            (data[channel_names[-1]]==1)] = 'tumor HLADR+'
+
+    x = np.array(data['centroid-0'])
+    y = np.array(data['centroid-1'])
+
+    points = np.stack((x, y)).transpose()
+    
+    try:
+        viewer.layers.pop('points')
+    except KeyError:
+        pass
+
+    points_layer = viewer.add_points(points,
+            size=25,
+            properties=data,
+            face_color=threshold_widget.marker.value,
+            name='points',
+            visible=False)
 
 viewer = napari.Viewer()
 
