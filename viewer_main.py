@@ -116,6 +116,13 @@ def load_cell_data(value: str):
             name='points',
             visible=True,
             shown=[True]*len(data))
+    
+    points_layer = viewer.add_points(points,
+            size=25,
+            properties=data,
+            name='cell type results',
+            visible=True,
+            shown=data['cell_type']==threshold_widget.cell_type.value)
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
@@ -140,46 +147,23 @@ def threshold_slider_change(value: float):
     threshold_dict[channel] = value
     
     data[channel + "_expressed"] = np.array(thresholded_idx, dtype=np.uint8)
-    print(np.sum(viewer.layers['points'].shown))
     viewer.layers['points'].shown = thresholded_idx
-    print(np.sum(viewer.layers['points'].shown))
     viewer.layers['points'].properties = data
 
     update_cell_types()
     cell_type_changed(threshold_widget.cell_type.value)
 
-@threshold_widget.marker.changed.connect
-def update_points_facecolor(value: str):
-    viewer.layers['points'].face_color = value
-    threshold_widget.threshold_slider.value = threshold_dict[value]
-    threshold_widget.threshold_value.value = threshold_dict[value]
-
 @threshold_widget.cell_type.changed.connect
 def cell_type_changed(value: str):
-    
-    try:
-        viewer.layers.pop('cell type results')
-    except KeyError:
-        pass
     
     data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
     
     if 'cell_type' not in data.columns:
         return
     
-    data = data[data['cell_type']==value]
+    ct_idx = data['cell_type']==value
 
-    x = np.array(data['centroid-0'])
-    y = np.array(data['centroid-1'])
-
-    points = np.stack((x, y)).transpose()
-    
-    if len(points) > 0: 
-        points_layer = viewer.add_points(points,
-                size=25,
-                properties=data,
-                name='cell type results',
-                visible=True)
+    viewer.layers['cell type results'].shown = ct_idx
 
 @threshold_widget.threshold_value.changed.connect
 def threshold_value_changed(value: float):
@@ -270,26 +254,11 @@ def update_cell_types():
         
     data.loc[assigned_twice,'cell_type'] = 'assigned_twice'
 
-    x = np.array(data['centroid-0'])
-    y = np.array(data['centroid-1'])
-
-    points = np.stack((x, y)).transpose()
-    
-    try:
-        viewer.layers.pop('points')
-    except KeyError:
-        pass
-
-    points_layer = viewer.add_points(points,
-            size=25,
-            properties=data,
-            face_color=threshold_widget.marker.value,
-            name='points',
-            visible=False)
+    viewer.layers['points'].properties = data  
 
 viewer = napari.Viewer()
 
 viewer.window.add_dock_widget(threshold_widget)
-#pp = propplot(viewer)
-#viewer.window.add_dock_widget(pp, area='bottom')
+pp = propplot(viewer)
+viewer.window.add_dock_widget(pp, area='bottom')
 napari.run()
