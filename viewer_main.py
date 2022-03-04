@@ -7,6 +7,9 @@ import pandas as pd
 from random import randrange
 import aicspylibczi
 from datetime import datetime as dt
+from contextlib import suppress
+
+import time
     
 LUTs = ['blue','cyan','gray','green','magenta','red','yellow']
 # harcoded channel names because the CZIs only have the marke names
@@ -81,7 +84,7 @@ def load_new_image(value: str):
         print("Loading channel " + str(c))
         image = czifile.read_mosaic(C=c,scale_factor=1)
         contrast_limits.append([0, 2**16])
-         
+
         # add each channel
         viewer.add_image(image, name=channel_names[c], visible=False, contrast_limits=contrast_limits[c])
         viewer.layers[c].colormap = LUTs[randrange(len(LUTs))]
@@ -95,6 +98,7 @@ def load_cell_data(value: str):
     #clear old points data
     try:
         viewer.layers['points'].pop()
+        viewer.layers['cell type results'].pop()
     except KeyError:
         pass
 
@@ -116,25 +120,26 @@ def load_cell_data(value: str):
             name='points',
             visible=True,
             shown=[True]*len(data))
-    
-    points_layer = viewer.add_points(points,
+    if "cell_type" in data.columns:
+        points_layer = viewer.add_points(points,
             size=25,
             properties=data,
             name='cell type results',
             visible=True,
             shown=data['cell_type']==threshold_widget.cell_type.value)
+    else:
+        points_layer = viewer.add_points(points,
+            size=25,
+            properties=data,
+            name='cell type results',
+            visible=True,
+            shown=[True]*len(data))
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
     
     threshold_widget.threshold_value.value = value
     
-    # remove old threhsold results
-    try:
-        viewer.layers.pop('threshold result')
-    except KeyError:
-        pass
-
     channel = threshold_widget.marker.value
     data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
     
@@ -259,6 +264,7 @@ def update_cell_types():
 viewer = napari.Viewer()
 
 viewer.window.add_dock_widget(threshold_widget)
-pp = propplot(viewer)
-viewer.window.add_dock_widget(pp, area='bottom')
+with suppress(TypeError):
+	pp = propplot(viewer)
+	viewer.window.add_dock_widget(pp, area='bottom')
 napari.run()
