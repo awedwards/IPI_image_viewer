@@ -8,6 +8,10 @@ from random import randrange
 import aicspylibczi
 from datetime import datetime as dt
 from contextlib import suppress
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 import time
     
@@ -17,6 +21,7 @@ channel_names = ['DAPI','HLADR','CD8','CD163','CD4','XCR1','CD3','PDL1','PanCK']
 
 # initialize dictionary to store thresholds for each channel
 threshold_dict = {}
+cluster_annotations = {}
 
 for c in channel_names:
     threshold_dict[c] = 0.0
@@ -34,7 +39,8 @@ for c in channel_names:
               'cdc1',
               'other_myeloid_and_b_cells',
               'double_pos_t_cell']},
-        threshold_slider={"widget_type": "FloatSlider",'max':20}
+        threshold_slider={"widget_type": "FloatSlider",'max':20},
+        cluster={"choices":['Tumor']}
         )
 
 def threshold_widget(
@@ -45,11 +51,11 @@ def threshold_widget(
         marker='DAPI',
         cell_type='cd4_t_cell',
         image_filename = pathlib.Path('/some/path.czi'),
-        cell_data_filename = pathlib.Path('/some/path.csv')
+        cell_data_filename = pathlib.Path('/some/path.csv'),
+        cluster='Tumor'
         ):
 
     pass
-
 
 @threshold_widget.image_filename.changed.connect
 def load_new_image(value: str):
@@ -97,9 +103,9 @@ def load_cell_data(value: str):
     
     #clear old points data
     try:
-        viewer.layers['points'].pop()
-        viewer.layers['cell type results'].pop()
-    except KeyError:
+        viewer.layers.remove('points')
+        viewer.layers.remove('cell type results')
+    except ValueError:
         pass
 
     data = pd.read_csv(value)
@@ -113,27 +119,45 @@ def load_cell_data(value: str):
     
     # format data for adding as layer
     points = np.stack((x, y)).transpose()
+    
     points_layer = viewer.add_points(points,
             size=25,
             properties=data,
-            face_color=threshold_widget.marker.value,
             name='points',
             visible=True,
             shown=[True]*len(data))
     if "cell_type" in data.columns:
-        points_layer = viewer.add_points(points,
+        cell_type_layer = viewer.add_points(points,
             size=25,
             properties=data,
             name='cell type results',
             visible=True,
             shown=data['cell_type']==threshold_widget.cell_type.value)
     else:
-        points_layer = viewer.add_points(points,
+        cell_type_layer = viewer.add_points(points,
             size=25,
             properties=data,
             name='cell type results',
             visible=True,
             shown=[True]*len(data))
+
+    cluster_col = [col for col in data.columns if "cluster" in col][0]
+    try:
+        with open(pathlib.Path(value.parent,"cluster_annotations.txt")) as f:
+            line = f.readline()
+            while line:
+                cluster = line.strip().split(",")
+                
+                try:
+                    cluster_annotations[cluster[0]].append(int(cluster[1]))
+                except KeyError:
+                    cluster_annotations[cluster[0]] = [int(cluster[1])]
+                line = f.readline()
+
+    except FileNotFoundError:
+        print('no annotation file found')
+
+    threshold_widget.cluster.choices = cluster_annotations.keys()
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
@@ -192,6 +216,36 @@ def save():
         data[channel + "_expressed"] = np.array(data[channel] > threshold_dict[channel], dtype=np.int8)
     
     data.to_csv(pathlib.Path(filepath, name[:-4] + "_single_cell_data_gated" + dt.now().strftime('%Y%m%d') + ".csv"))
+
+@threshold_widget.cluster.changed.connect
+def cluster_changed(value: str):
+
+    try:
+        viewer.layers.remove('flowsom')
+    except ValueError:
+        pass
+
+    data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
+    cluster_col = [col for col in data.columns if "cluster" in col]
+    
+    if not (len(cluster_col)==1):
+        raise("Too many, or not enough, cluster columns")
+    else:
+        cluster_col = cluster_col[0]
+    
+    x = np.array(data['centroid-0'])
+    y = np.array(data['centroid-1'])
+    
+    centroids = np.stack((x, y)).transpose()
+
+    cluster_labels = data.loc[:,cluster_col].values
+    
+    try:
+        cluster_idx = np.isin(cluster_labels, np.array(cluster_annotations[value]))
+    except KeyError:
+        cluster_idx = [False]*len(cluster_labels)
+
+    viewer.layers['points'].shown = cluster_idx
 
 def update_cell_types():
    
@@ -264,6 +318,10 @@ def update_cell_types():
 viewer = napari.Viewer()
 
 viewer.window.add_dock_widget(threshold_widget)
+
+#static_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+#viewer.window.add_dock_widget(static_canvas, area='bottom', name='matplotlib_figure')    
+
 with suppress(TypeError):
 	pp = propplot(viewer)
 	viewer.window.add_dock_widget(pp, area='bottom')
