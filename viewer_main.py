@@ -158,6 +158,10 @@ def load_cell_data(value: str):
         print('no annotation file found')
 
     threshold_widget.cluster.choices = cluster_annotations.keys()
+    
+    im = plt.imread(pathlib.Path(value.parent, "boundary_image.tiff"))
+    viewer.add_image(im, name='segmentation', visible=False)
+
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
