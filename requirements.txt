@@ -1,0 +1,12 @@
+aicspylibczi==3.0.5
+magicgui==0.4.0
+matplotlib==3.5.1
+napari==0.4.15
+napari_properties_plotter==0.2.2
+numpy==1.22.3
+opencv_python==4.1.2.30
+pandas==1.4.2
+Pillow==9.1.1
+scikit_image==0.19.2
+skimage==0.0
+tifffile==2022.3.25
