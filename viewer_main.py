@@ -319,10 +319,10 @@ def get_boundaries(boundaries_file_path: str):
     segmented_cell_borders_filename = boundaries_file_path.stem.split('-')[-1]
 
     try:
-        with open(f'{CURRENT_DIR}/final_data/.{segmented_cell_borders_filename}_metadata.json', 'rb') as stitching_dims_file:
+        with open(f'{CURRENT_DIR}/metadata/.{segmented_cell_borders_filename}_metadata.json', 'rb') as stitching_dims_file:
             data = json.load(stitching_dims_file)
     except Exception as e:
-        print_colored("red", f"Could not open or load {CURRENT_DIR}/final_data/.{segmented_cell_borders_filename}.czi'."
+        print_colored("red", f"Could not open or load {CURRENT_DIR}/metadata/.{segmented_cell_borders_filename}.czi'."
                              f"Ensure that the czi file was tiled the associated meta data is in the final_data directory!")
         print(e)
         print(traceback.format_exc())
