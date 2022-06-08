@@ -309,7 +309,6 @@ def update_cell_types():
     ct_idx[:, 6] = (data['DAPI_expressed'] == 1) & \
                    (data['CD3_expressed'] == 0) & \
                    (data['XCR1_expressed'] == 1) & \
-                   (data['HLADR_expressed'] == 1) & \
                    (data['CD163_expressed'] == 1)
     
     assigned_twice = np.sum(ct_idx, axis=1) > 1
@@ -330,7 +329,7 @@ def get_boundaries(boundaries_file_path: str):
             data = json.load(stitching_dims_file)
     except Exception as e:
         print_colored("red", f"Could not open or load {CURRENT_DIR}/metadata/.{segmented_cell_borders_filename}.czi'."
-                             f"Ensure that the czi file was tiled the associated meta data is in the final_data directory!")
+                             f"Ensure that the czi file was tiled the associated meta data is in the metadata directory!")
         print(e)
         print(traceback.format_exc())
         return
