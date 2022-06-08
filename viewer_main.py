@@ -257,7 +257,8 @@ def update_cell_types():
                   'mac',
                   'cdc1',
                   'other_myeloid_and_b_cells',
-                  'double_pos_t_cell']
+                  'double_pos_t_cell',
+                  'double_pos_xrc1_cd163']
 
     data['cell_type'] = ['other'] * len(data)
 
@@ -304,7 +305,13 @@ def update_cell_types():
                    (data['CD4_expressed'] == 1) & \
                    (data['CD8_expressed'] == 1) & \
                    (data['XCR1_expressed'] == 0)
-
+    
+    ct_idx[:, 6] = (data['DAPI_expressed'] == 1) & \
+                   (data['CD3_expressed'] == 0) & \
+                   (data['XCR1_expressed'] == 1) & \
+                   (data['HLADR_expressed'] == 1) & \
+                   (data['CD163_expressed'] == 1)
+    
     assigned_twice = np.sum(ct_idx, axis=1) > 1
 
     for i, ct in enumerate(cell_types):
