@@ -306,7 +306,7 @@ def update_cell_types():
                    (data['CD8_expressed'] == 1) & \
                    (data['XCR1_expressed'] == 0)
     
-    ct_idx[:, 6] = (data['DAPI_expressed'] == 1) & \
+    ct_idx[:, 7] = (data['DAPI_expressed'] == 1) & \
                    (data['CD3_expressed'] == 0) & \
                    (data['XCR1_expressed'] == 1) & \
                    (data['CD163_expressed'] == 1)
