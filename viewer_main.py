@@ -24,6 +24,18 @@
 #################################################################################################################
 #TODO: Add DEBUG information
 #TODO: Fix Same File Load Bug
+#TODO: Multithread the channels
+#TODO: Metadata look better.
+#   Take bound and labels --> and change color based on if __
+#TODO: Color in Boundaries
+#TODO: Support Windows
+#TODO: Add channels from command line
+#TODO: Make large tiff files viewable, and integrate with imagej/fiji
+#TODO: Make clear files optional
+#TODO: Test and Make Usable on windows OS
+#TODO: Make slider threshold value be able to change range
+#TODO: Threshold file is overwritten when opening or refreshing?
+#TODO: Fix update_celL_types
 
 from PIL import Image
 from contextlib import suppress
@@ -41,7 +53,7 @@ import pandas as pd
 import pathlib
 import traceback
 import warnings
-from segmentation_utils import print_colored, napari_viewer_parser
+from segmentation_utils import print_colored, napari_viewer_parser, restricted_float
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -53,8 +65,10 @@ all_channels = [
     ['DAPI','HLADR','CD8','CD163','CD4','XCR1','CD3','PDL1','PanCK']
 ]
 DEFAULT_CHANNELS_TO_USE = 1
+DEFAULT_SPINBOX_STEP = .5
 
 channel_names = all_channels[DEFAULT_CHANNELS_TO_USE]
+current_spinbox_step = DEFAULT_SPINBOX_STEP
 
 cell_type_col = False
 
@@ -62,10 +76,17 @@ cell_type_col = False
 napari_viewer_parser.add_argument("--channel", "-c", dest='channel', action="store_true",
                     help="View, Select, and Add Channels!")
 
+napari_viewer_parser.add_argument("--step", "-s", dest='step', type=restricted_float,
+                    help=f"This sets the step (or how much the value can be decreased or increased)"
+                         f"for the threshold_value number. (Default is {DEFAULT_SPINBOX_STEP}")
+
 napari_viewer_parser_args = napari_viewer_parser.parse_args()
 
 if napari_viewer_parser_args.debug:
     DEBUG = True
+
+if napari_viewer_parser_args.step:
+    current_spinbox_step = napari_viewer_parser_args.step
 
 #Gets proper channels from above for tiling
 def get_channel_choice(len_of_channels):
@@ -104,6 +125,7 @@ for c in channel_names:
 
 @magicgui(
     # call_button connects to save method
+    threshold_value={"widget_type": "FloatSpinBox", 'value': 0.0, 'step': current_spinbox_step, 'max': 20.0},
     call_button="Save thresholds",
     # name, value pairs for the marker drop down menu. The Tumor marker value is changed based on which type of sample is loaded in
     marker={"choices": [('DAPI', 'DAPI'), ('CD3', 'CD3'), ('CD4', 'CD4'), ('CD8', 'CD8'), ('CD163', 'CD163'),

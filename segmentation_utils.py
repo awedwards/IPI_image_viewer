@@ -66,6 +66,16 @@ napari_viewer_parser.add_argument(
     help='Print additional information to the terminal when running script'
 )
 
+def restricted_float(x):
+    try:
+        x = float(x)
+    except ValueError:
+        raise argparse.ArgumentTypeError("%r not a floating-point literal" % (x,))
+
+    if x <= 0.0 or x >= 2.0:
+        raise argparse.ArgumentTypeError("%r not in range [0.01, 2.0]" % (x,))
+    return x
+
 napari_viewer_parser.add_argument("--points", "-p",
                     dest='points',
                     action="store",
