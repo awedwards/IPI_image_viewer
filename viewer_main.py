@@ -53,9 +53,11 @@ import numpy as np
 import os
 import pandas as pd
 import pathlib
+import time
 import traceback
 import warnings
 from segmentation_utils import print_colored, napari_viewer_parser, restricted_float
+from napari.qt.threading import thread_worker
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -164,28 +166,34 @@ def threshold_widget(
         clear_layers_button='No'
 ): pass
 
+def update_layer(inputs):
+    new_image = inputs[0]
+    channel_name = inputs[1]
+    viewer.add_image(new_image, name=channel_name, visible=False, contrast_limits=[0, 2 ** 16],
+                     colormap=LUTs[randrange(len(LUTs))], opacity=1.0, blending='additive',
+                     interpolation='gaussian')
+
+@thread_worker(connect={"returned": update_layer})
+def multiload_image(czi_file_path, ind, chan):
+    czi_file = aicspylibczi.CziFile(czi_file_path) #This is the part that is not memory efficient wise, tho it is faster
+    return czi_file.read_mosaic(C=ind, scale_factor=1), chan
+
+# test_multithread_image()
 @threshold_widget.czi_image_filename.changed.connect
 def load_new_image(value: str):
-    contrast_limits = []
-
-    czi_file = aicspylibczi.CziFile(value)
-
     #Clears out old channel values when a new image is loaded using widget gui
     if(threshold_widget.clear_layers_button.value == 'Yes'):
         print_colored("yellow", f"Clearing Out Old Layers")
         while(len(viewer.layers) != 0):
             viewer.layers.pop()
-        #Add each channel img to layers with associated name
+
+    #Add each channel img to layers with associated name
     for index, channel_name in enumerate(channel_names):
         print_colored("cyan", f"Loading channel {index} - {channel_name}")
-        image = czi_file.read_mosaic(C=index, scale_factor=1)
-        contrast_limits.append([0, 2**16])
-        # add each channel
-        viewer.add_image(image, name=channel_name, visible=False, contrast_limits=contrast_limits[index])
-        viewer.layers[channel_name].colormap = LUTs[randrange(len(LUTs))]
-        viewer.layers[channel_name].opacity = 1.0
-        viewer.layers[channel_name].blending = 'additive'
-        viewer.layers[channel_name].interpolation = 'gaussian'
+        
+        #This line starts a new worker thread which reads in an image, and safely
+        #adds it to the viewer
+        multiload_image(value, index, channel_name) #
 
     threshold_widget.marker.set_choice('Tumor',channel_names[-1])
 
@@ -412,9 +420,6 @@ if(napari_viewer_parser_args.points):
 
 if(napari_viewer_parser_args.bounds):
     threshold_widget.cell_boundaries_filename.value = napari_viewer_parser_args.bounds[0]
-#
-# @napari.Viewer.bind_key('i')
-# def add_layer(viewer):
-#     print_colored("green", threshold_widget.image_overwrite.value)
-
+# load_new_image("/home/nick/code/UCSF/Seg/IPI_image_viewer/cell_to_segment_smaller.czi")
 napari.run()
+
