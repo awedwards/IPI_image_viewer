@@ -25,19 +25,20 @@
 #TODO: Add DEBUG information
 #TODO: Fix Same File Load Bug
 #TODO: Multithread the channels
-#TODO: Metadata look better.
-#   Take bound and labels --> and change color based on if __
+#COMPLETED: Make boundaries get from tile_metadata.txt.
 #TODO: Color in Boundaries
+#   Take bound and labels --> and change color based on if __
 #TODO: Support Windows
 #TODO: Add channels from command line
 #TODO: Make large tiff files viewable, and integrate with imagej/fiji
 #TODO: Make clear files optional
 #TODO: Test and Make Usable on windows OS
-#TODO: Make slider threshold value be able to change range
+#COMPLETED: Make slider threshold value be able to change range
 #TODO: Threshold file is overwritten when opening or refreshing?
 #TODO: Fix update_celL_types
 
 from PIL import Image
+from aicsimageio import AICSImage
 from contextlib import suppress
 from datetime import datetime as dt
 from magicgui import magicgui
@@ -45,7 +46,7 @@ from napari_properties_plotter import PropertyPlotter as propplot
 from random import randrange
 
 import aicspylibczi
-import json
+import csv
 import napari
 import numpy as np
 import os
@@ -117,6 +118,14 @@ if napari_viewer_parser_args.channel:
         print_colored("cyan", f"Type each channel out separated by a comma, and custom channels will be created. (No trailing comma!)")
         channel_names = input("Give Channels: ").replace(" ", "").split(',')
 
+def calculate_final_dimensions_from_metadata(tile_metadata_file_path):
+    with open(tile_metadata_file_path, newline='') as metadata_file_path:
+        tile_position_data = csv.DictReader(metadata_file_path)
+        final_dimensions = metadata_file_path.readlines()[-1].split(',')
+        rows = len(np.arange(0, int(final_dimensions[2]), 2048))  #final x dimension
+        cols = len(np.arange(0, int(final_dimensions[4]), 2048))  #final y dimensions
+        return rows, cols
+
 # initialize dictionary to store thresholds for each channel
 threshold_dict = {}
 
@@ -149,16 +158,13 @@ def threshold_widget(
         cell_data_filename = pathlib.Path("<Select File>"),
         cell_boundaries_filename=pathlib.Path("<Select File>")
 ): pass
-from aicsimageio import AICSImage
 
 @threshold_widget.czi_image_filename.changed.connect
 def load_new_image(value: str):
-    #TODO: Make large tiff files viewable, and integrate with imagej/fiji
     contrast_limits = []
 
     czi_file = aicspylibczi.CziFile(value)
 
-    #TODO: Make optional
     #Clears out old channel values when a new image is loaded using widget gui
     while(len(viewer.layers) != 0):
         viewer.layers.pop()
@@ -178,7 +184,6 @@ def load_new_image(value: str):
 
 @threshold_widget.cell_data_filename.changed.connect
 def load_cell_data(cell_data_file_path: str):
-    #TODO: Keep track of number points and output to napari
 
     # clear old points data
     if ('points' in viewer.layers):
@@ -218,7 +223,6 @@ def load_cell_data(cell_data_file_path: str):
         name='cell type results',
         visible=True,
         shown=shown_data)
-
 
 @threshold_widget.threshold_slider.changed.connect
 def threshold_slider_change(value: float):
@@ -339,27 +343,22 @@ def update_cell_types():
 @threshold_widget.cell_boundaries_filename.changed.connect
 def get_boundaries(boundaries_file_path: str):
     segmented_cell_borders_filename = boundaries_file_path.stem.split('-')[-1]
+    tile_metadata_path = pathlib.Path(CURRENT_DIR, 'final_data',
+                                      f"{segmented_cell_borders_filename}_dir", 'tile_metadata.txt')
 
     try:
-        with open(f'{CURRENT_DIR}/final_data/.{segmented_cell_borders_filename}_metadata.json', 'rb') as stitching_dims_file:
-            data = json.load(stitching_dims_file)
+        rows, cols = calculate_final_dimensions_from_metadata(tile_metadata_path)
     except Exception as e:
-        print_colored("red", f"Could not open or load {CURRENT_DIR}/final_data/.{segmented_cell_borders_filename}.czi'."
-                             f"Ensure that the czi file was tiled the associated meta data is in the final_data directory!")
-        print(e)
-        print(traceback.format_exc())
-        return
-
-    rows = data['dims']['rows']
-    cols = data['dims']['cols']
+        print_colored("red", f"Could not open or load tile_metadata_file_path."
+                             f"Ensure associated meta data is in the final_data directory!")
+        print(f"{e} \n{traceback.format_exc()}")
 
     try:
         with open(boundaries_file_path, 'rb') as boundaries_file:
             a = np.load(boundaries_file).reshape(rows*cols, 2048, 2048)
     except Exception as e:
         print_colored("red", f"Could not open or load {boundaries_file_path}")
-        print(e)
-        print(traceback.format_exc())
+        print(f"{e} \n{traceback.format_exc()}")
         return
 
     #Need to get czi dimensions to properly stitch boundaries together
@@ -385,7 +384,10 @@ def get_boundaries(boundaries_file_path: str):
     temp_img = Image.fromarray((final_concat * 255).astype(np.uint8)) #Need to alter to 255 scale as it is grayscale
     temp_img_with_transparency = temp_img.convert("RGBA") #A is Alpha for transparency
     array_with_transparency = np.asarray(temp_img_with_transparency)
-    array_with_transparency[:, :, 3] = final_concat * 255 #Adjust transparency
+    array_with_transparency[:, :, 3] = final_concat * 255 #Adjust transparency #White
+    # array_with_transparency[:, :, 2] = final_concat * 0 #Adjust transparency #Yellow
+    # array_with_transparency[:, :, 1] = final_concat * 0 #Adjust transparency #Magenta
+    # array_with_transparency[:, :, 0] = final_concat * 0 #Adjust transparency #Cyan
     viewer.add_image(array_with_transparency, name="NPY Bounds")
 
 
@@ -397,14 +399,12 @@ pp = propplot(viewer)
 viewer.window.add_dock_widget(pp, area='bottom')
 
 if(napari_viewer_parser_args.image):
-    load_new_image(napari_viewer_parser_args.image[0])
+    threshold_widget.czi_image_filename.value = napari_viewer_parser_args.image[0]
 
 if(napari_viewer_parser_args.points):
-    load_cell_data(napari_viewer_parser_args.points[0])
+    threshold_widget.cell_data_filename.value = napari_viewer_parser_args.points[0]
 
 if(napari_viewer_parser_args.bounds):
-    get_boundaries(napari_viewer_parser_args.bounds[0])
-
-print_colored("cyan", "Running napari...")
+    threshold_widget.cell_boundaries_filename.value = napari_viewer_parser_args.bounds[0]
 
 napari.run()

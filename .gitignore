@@ -1,0 +1,4 @@
+*.czi
+.ipynb_checkpoints/*
+final_data/*
+__pycache__/*
