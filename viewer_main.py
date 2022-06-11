@@ -22,20 +22,21 @@
 #                         Specify a single file with segementation boundaries to load in
 
 #################################################################################################################
+#TODO: Fix update_celL_types
+#TODO: Multithread the channels
+#TODO: Test and Make Usable on windows OS (support)
+#TODO: Threshold file is overwritten when opening or refreshing?
 #TODO: Add DEBUG information
 #TODO: Fix Same File Load Bug
-#TODO: Multithread the channels
-#COMPLETED: Make boundaries get from tile_metadata.txt.
 #TODO: Color in Boundaries
 #   Take bound and labels --> and change color based on if __
-#TODO: Support Windows
-#TODO: Add channels from command line
 #TODO: Make large tiff files viewable, and integrate with imagej/fiji
-#TODO: Make clear files optional
-#TODO: Test and Make Usable on windows OS
+
+#COMPLETED: Add channels from command line
 #COMPLETED: Make slider threshold value be able to change range
-#TODO: Threshold file is overwritten when opening or refreshing?
-#TODO: Fix update_celL_types
+#COMPLETED: Make boundaries get from tile_metadata.txt.
+#COMPLETED: Make clear files optional
+
 
 from PIL import Image
 from aicsimageio import AICSImage
@@ -147,16 +148,20 @@ for c in channel_names:
                            'cdc1',
                            'other_myeloid_and_b_cells',
                            'double_pos_t_cell']},
-    threshold_slider={"widget_type": "FloatSlider", 'max': 20}
+    threshold_slider={"widget_type": "FloatSlider", 'max': 20},
+    clear_layers_button={"label": "Clear Layers with New Image",
+                     "widget_type": "RadioButtons", 'choices': ["Yes", "No"]}
+
 )
 def threshold_widget(
         threshold_value: float,
         threshold_slider=0.0,
         marker='DAPI',
         cell_type='cd4_t_cell',
-        czi_image_filename = pathlib.Path("<Select File>"),
-        cell_data_filename = pathlib.Path("<Select File>"),
-        cell_boundaries_filename=pathlib.Path("<Select File>")
+        czi_image_filename=pathlib.Path("<Select File>"),
+        cell_data_filename=pathlib.Path("<Select File>"),
+        cell_boundaries_filename=pathlib.Path("<Select File>"),
+        clear_layers_button='No'
 ): pass
 
 @threshold_widget.czi_image_filename.changed.connect
@@ -166,9 +171,11 @@ def load_new_image(value: str):
     czi_file = aicspylibczi.CziFile(value)
 
     #Clears out old channel values when a new image is loaded using widget gui
-    while(len(viewer.layers) != 0):
-        viewer.layers.pop()
-    #Add each channel img to layers with associated name
+    if(threshold_widget.clear_layers_button.value == 'Yes'):
+        print_colored("yellow", f"Clearing Out Old Layers")
+        while(len(viewer.layers) != 0):
+            viewer.layers.pop()
+        #Add each channel img to layers with associated name
     for index, channel_name in enumerate(channel_names):
         print_colored("cyan", f"Loading channel {index} - {channel_name}")
         image = czi_file.read_mosaic(C=index, scale_factor=1)
@@ -391,7 +398,6 @@ def get_boundaries(boundaries_file_path: str):
     viewer.add_image(array_with_transparency, name="NPY Bounds")
 
 
-viewer = None
 viewer = napari.Viewer()
 viewer.window.add_dock_widget(threshold_widget)
 
@@ -406,5 +412,9 @@ if(napari_viewer_parser_args.points):
 
 if(napari_viewer_parser_args.bounds):
     threshold_widget.cell_boundaries_filename.value = napari_viewer_parser_args.bounds[0]
+#
+# @napari.Viewer.bind_key('i')
+# def add_layer(viewer):
+#     print_colored("green", threshold_widget.image_overwrite.value)
 
 napari.run()
