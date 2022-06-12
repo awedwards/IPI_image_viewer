@@ -23,7 +23,7 @@
 
 #################################################################################################################
 #TODO: Fix update_celL_types
-#TODO: Multithread the channels
+#TODO: Multithread the channels #NOTE: Version 1 of Multithreading is added (but there may be more to save)
 #TODO: Test and Make Usable on windows OS (support)
 #TODO: Threshold file is overwritten when opening or refreshing?
 #TODO: Add DEBUG information
@@ -178,7 +178,6 @@ def multiload_image(czi_file_path, ind, chan):
     czi_file = aicspylibczi.CziFile(czi_file_path) #This is the part that is not memory efficient wise, tho it is faster
     return czi_file.read_mosaic(C=ind, scale_factor=1), chan
 
-# test_multithread_image()
 @threshold_widget.czi_image_filename.changed.connect
 def load_new_image(value: str):
     #Clears out old channel values when a new image is loaded using widget gui
@@ -186,16 +185,16 @@ def load_new_image(value: str):
         print_colored("yellow", f"Clearing Out Old Layers")
         while(len(viewer.layers) != 0):
             viewer.layers.pop()
-
+    start_time = time.perf_counter()
     #Add each channel img to layers with associated name
     for index, channel_name in enumerate(channel_names):
         print_colored("cyan", f"Loading channel {index} - {channel_name}")
-        
         #This line starts a new worker thread which reads in an image, and safely
         #adds it to the viewer
         multiload_image(value, index, channel_name) #
-
-    threshold_widget.marker.set_choice('Tumor',channel_names[-1])
+    finish_time = time.perf_counter()
+    if DEBUG: print_colored("green", f"Final Time: {finish_time - start_time}")
+    threshold_widget.marker.set_choice('Tumor', channel_names[-1])
 
 @threshold_widget.cell_data_filename.changed.connect
 def load_cell_data(cell_data_file_path: str):
@@ -420,6 +419,6 @@ if(napari_viewer_parser_args.points):
 
 if(napari_viewer_parser_args.bounds):
     threshold_widget.cell_boundaries_filename.value = napari_viewer_parser_args.bounds[0]
-# load_new_image("/home/nick/code/UCSF/Seg/IPI_image_viewer/cell_to_segment_smaller.czi")
+
 napari.run()
 
