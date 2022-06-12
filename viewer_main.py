@@ -36,7 +36,7 @@
 #COMPLETED: Make slider threshold value be able to change range
 #COMPLETED: Make boundaries get from tile_metadata.txt.
 #COMPLETED: Make clear files optional
-
+#COMPLETED: V1 of Multithreading image input
 
 from PIL import Image
 from aicsimageio import AICSImage
@@ -70,10 +70,10 @@ all_channels = [
 ]
 DEFAULT_CHANNELS_TO_USE = 1
 DEFAULT_SPINBOX_STEP = .5
+DEBUG = False
 
 channel_names = all_channels[DEFAULT_CHANNELS_TO_USE]
 current_spinbox_step = DEFAULT_SPINBOX_STEP
-
 cell_type_col = False
 
 #Using argument parser to organize the input
@@ -85,7 +85,6 @@ napari_viewer_parser.add_argument("--step", "-s", dest='step', type=restricted_f
                          f"for the threshold_value number. (Default is {DEFAULT_SPINBOX_STEP}")
 
 napari_viewer_parser_args = napari_viewer_parser.parse_args()
-
 if napari_viewer_parser_args.debug:
     DEBUG = True
 
