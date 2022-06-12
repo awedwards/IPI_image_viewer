@@ -105,8 +105,8 @@ def write_tile_breakdown(rows, cols, czi_filename):
         "filename": czi_filename.stem
     }
 
-    print_colored("yellow", f"Writing {str(data)} to .{czi_filename.stem} in final_data/")
-    with open(os.path.dirname(os.path.realpath(__file__)) + f'/final_data/.{czi_filename.stem}_metadata.json', 'w') as f:
+    print_colored("yellow", f"Writing {str(data)} to .{czi_filename.stem} in metadata/")
+    with open(os.path.dirname(os.path.realpath(__file__)) + f'/metadata/.{czi_filename.stem}_metadata.json', 'w') as f:
         json.dump(data, f, ensure_ascii=False)
 
 #Steps
@@ -117,6 +117,7 @@ def write_tile_breakdown(rows, cols, czi_filename):
 # 5. Create the tiff files
 
 def tile_czi_file():
+    global written
     for input_czi_file in input_czi_files:
 
 
@@ -130,7 +131,7 @@ def tile_czi_file():
 
         assert len(channels_to_use) == nchannels, "Number of channels for CZI and in file must match"
 
-        dir_to_create = Path(os.path.curdir, czi_file_path.stem + '_dir')
+        dir_to_create = Path(os.path.curdir, czi_file_path.stem)
 
         try:
             if DEBUG: print("DEBUG: Creating", dir_to_create)
@@ -191,6 +192,7 @@ def tile_czi_file():
                             f.write(",".join(["fov" + str(fov), str(x), str(x_end), str(y), str(y_end)]) + "\n")
                         fov += 1
         print_colored("green", f"Created {dir_to_create} with channel tiffs in fov directories!")
+        written=False
 if __name__ == "__main__":
     tile_czi_file()
 
