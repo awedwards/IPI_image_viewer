@@ -74,7 +74,6 @@ DEBUG = False
 
 channel_names = all_channels[DEFAULT_CHANNELS_TO_USE]
 current_spinbox_step = DEFAULT_SPINBOX_STEP
-cell_type_col = False
 
 #Using argument parser to organize the input
 napari_viewer_parser.add_argument("--channel", "-c", dest='channel', action="store_true",
@@ -140,7 +139,7 @@ for c in channel_names:
     call_button="Save thresholds",
     # name, value pairs for the marker drop down menu. The Tumor marker value is changed based on which type of sample is loaded in
     marker={"choices": [('DAPI', 'DAPI'), ('CD3', 'CD3'), ('CD4', 'CD4'), ('CD8', 'CD8'), ('CD163', 'CD163'),
-                        ('XCR1', 'XCR1'), ('HLADR', 'HLADR'), ('PDL1', 'PDL1'), ('Tumor', 'PanCK')]},
+                        ('XCR1', 'XCR1'), ('HLADR', 'HLADR'), ('PDL1', 'PDL1'), ('Tumor', channel_names[-1])]},
     # cell type dropdown list
     cell_type={"choices": ['double_neg_t_cell',
                            'cd4_t_cell',
@@ -225,7 +224,6 @@ def load_cell_data(cell_data_file_path: str):
     )
 
     if("cell_type" in data.columns):
-        cell_type_col = True
         shown_data = data['cell_type'] == threshold_widget.cell_type.value
     else:
         shown_data = np.array([True]) * len(data)
@@ -282,10 +280,9 @@ def save():
 
 @threshold_widget.cell_type.changed.connect
 def cell_type_changed(value: str):
-    if(cell_type_col):
-        data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
-        ct_idx = data['cell_type'] == value
-        viewer.layers['cell type results'].shown = ct_idx
+    data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
+    ct_idx = data['cell_type'] == value
+    viewer.layers['cell type results'].shown = ct_idx
 
 def update_cell_types():
     data = pd.DataFrame.from_dict(viewer.layers['points'].properties)
@@ -362,14 +359,14 @@ def update_cell_types():
 @threshold_widget.cell_boundaries_filename.changed.connect
 def get_boundaries(boundaries_file_path: str):
     segmented_cell_borders_filename = boundaries_file_path.stem.split('-')[-1]
-    tile_metadata_path = pathlib.Path(CURRENT_DIR, 'final_data',
-                                      f"{segmented_cell_borders_filename}_dir", 'tile_metadata.txt')
+    tile_metadata_path = pathlib.Path(CURRENT_DIR, 'metadata',
+                                      f"{segmented_cell_borders_filename}", 'tile_metadata.txt')
 
     try:
         rows, cols = calculate_final_dimensions_from_metadata(tile_metadata_path)
     except Exception as e:
         print_colored("red", f"Could not open or load tile_metadata_file_path."
-                             f"Ensure associated meta data is in the final_data directory!")
+                             f"Ensure associated meta data is in the metadata directory!")
         print(f"{e} \n{traceback.format_exc()}")
 
     try:
